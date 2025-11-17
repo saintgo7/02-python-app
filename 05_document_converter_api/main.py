@@ -1,20 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_graphql import GraphQL
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
+import logging
+from app.openapi_config import setup_openapi_documentation
 from app.core.database import init_db
-from app.routes import auth, advanced_crud, websocket
-from config import settings
-from app.cache import cache
-from app.graphql_schema import schema
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Initialize database
 init_db()
 
 # Create FastAPI app
 app = FastAPI(
-    title="05_document_converter_api",
+    title="API Documentation",
     version="1.0.0",
-    description="05_document_converter_api API with Advanced Features"
+    description="Comprehensive REST API with Advanced Features"
 )
 
 # Add CORS middleware
@@ -26,46 +30,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Setup OpenAPI documentation
+setup_openapi_documentation(app, "API Documentation", "1.0.0")
+
 # Include routers
-app.include_router(auth.router)
-app.include_router(advanced_crud.router)
-app.include_router(websocket.router)
+from app.routes import auth, items
 
-# GraphQL endpoint
-app.add_route("/graphql", GraphQL(schema))
+app.include_router(auth.router, prefix="/auth", tags=["authentication"])
+app.include_router(items.router, prefix="/items", tags=["items"])
+
+# Static documentation
+docs_dir = Path(__file__).parent.parent / "docs"
+if docs_dir.exists():
+    try:
+        app.mount("/documentation", StaticFiles(directory=docs_dir), name="documentation")
+    except:
+        pass
 
 
-@app.get("/")
+@app.get("/", tags=["root"])
 def read_root():
+    """Root endpoint with API information"""
     return {
-        "message": "05_document_converter_api API with Advanced Features",
+        "message": "Welcome to API Documentation",
         "version": "1.0.0",
-        "features": ["REST API", "Advanced Filtering", "Redis Caching", "WebSocket", "GraphQL"]
+        "docs": {
+            "swagger": "/docs",
+            "redoc": "/redoc",
+            "openapi": "/openapi.json",
+            "documentation": "/documentation"
+        }
     }
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health_check():
-    return {
-        "status": "healthy",
-        "cache": "connected" if cache.client else "disconnected"
-    }
-
-
-@app.on_event("startup")
-async def startup_event():
-    """Startup event"""
-    print("🚀 Starting 05_document_converter_api with advanced features...")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """Shutdown event"""
-    print("🛑 Shutting down 05_document_converter_api...")
-    if cache.client:
-        cache.client.close()
+    """Health check endpoint"""
+    return {"status": "healthy", "version": "1.0.0"}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

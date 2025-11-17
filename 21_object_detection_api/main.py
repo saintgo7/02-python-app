@@ -1,132 +1,74 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.responses import JSONResponse
-import numpy as np
-from PIL import Image
-import io
-import json
-from app.batch_processor import BatchProcessor
-from app.model_ensemble import ModelEnsemble
-from app.model_metrics import ModelMetrics
-from app.model_versioning import ModelVersioning
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
+import logging
+from app.openapi_config import setup_openapi_documentation
+from app.core.database import init_db
 
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize database
+init_db()
+
+# Create FastAPI app
 app = FastAPI(
-    title="Advanced AI Model API",
+    title="API Documentation",
     version="1.0.0",
-    description="AI model with batch processing, ensemble, metrics, and versioning"
+    description="Comprehensive REST API with Advanced Features"
 )
 
-# Initialize components
-batch_processor = BatchProcessor(batch_size=32)
-model_metrics = ModelMetrics()
-model_versioning = ModelVersioning()
-ensemble = ModelEnsemble()
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-# Placeholder for actual model
-model = None
+# Setup OpenAPI documentation
+setup_openapi_documentation(app, "API Documentation", "1.0.0")
 
+# Include routers
+from app.routes import auth, items
 
-@app.post("/predict")
-async def predict(file: UploadFile = File(...)):
-    """Single image prediction"""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
+app.include_router(auth.router, prefix="/auth", tags=["authentication"])
+app.include_router(items.router, prefix="/items", tags=["items"])
 
+# Static documentation
+docs_dir = Path(__file__).parent.parent / "docs"
+if docs_dir.exists():
     try:
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
-        image_array = np.array(image.resize((224, 224))) / 255.0
-
-        prediction = model.predict(np.expand_dims(image_array, axis=0))
-
-        return {
-            "predictions": prediction[0].tolist(),
-            "predicted_class": int(np.argmax(prediction[0])),
-            "confidence": float(np.max(prediction[0]))
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        app.mount("/documentation", StaticFiles(directory=docs_dir), name="documentation")
+    except:
+        pass
 
 
-@app.post("/predict-batch")
-async def predict_batch(files: list = File(...)):
-    """Batch prediction"""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
-    try:
-        images = []
-        filenames = []
-
-        for file in files:
-            contents = await file.read()
-            image = Image.open(io.BytesIO(contents))
-            image_array = np.array(image.resize((224, 224))) / 255.0
-            images.append(image_array)
-            filenames.append(file.filename)
-
-        predictions = batch_processor.process_batch(model, images)
-
-        results = []
-        for filename, pred in zip(filenames, predictions):
-            results.append({
-                "filename": filename,
-                "predictions": pred.tolist(),
-                "predicted_class": int(np.argmax(pred)),
-                "confidence": float(np.max(pred))
-            })
-
-        return {"results": results, "total": len(results)}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@app.get("/metrics")
-def get_metrics():
-    """Get latest metrics"""
-    latest = model_metrics.get_latest_metrics()
-    summary = model_metrics.get_metrics_summary()
-
+@app.get("/", tags=["root"])
+def read_root():
+    """Root endpoint with API information"""
     return {
-        "latest": latest,
-        "summary": summary,
-        "total_predictions": len(model_metrics.metrics_history)
+        "message": "Welcome to API Documentation",
+        "version": "1.0.0",
+        "docs": {
+            "swagger": "/docs",
+            "redoc": "/redoc",
+            "openapi": "/openapi.json",
+            "documentation": "/documentation"
+        }
     }
 
 
-@app.get("/versions")
-def get_versions():
-    """Get all model versions"""
-    versions = model_versioning.get_versions()
-    return {"versions": versions}
+@app.get("/health", tags=["health"])
+def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy", "version": "1.0.0"}
 
 
-@app.post("/save-version/{version_id}")
-def save_version(version_id: str, notes: str = ""):
-    """Save current model as version"""
-    if model is None:
-        raise HTTPException(status_code=500, detail="Model not loaded")
-
-    metrics = model_metrics.get_latest_metrics()
-    success = model_versioning.save_version(model, version_id, metrics, notes)
-
-    if success:
-        return {"message": f"Model saved as {version_id}"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to save version")
-
-
-@app.get("/load-version/{version_id}")
-def load_version(version_id: str):
-    """Load specific model version"""
-    global model
-    model = model_versioning.load_version(version_id)
-
-    if model is None:
-        raise HTTPException(status_code=404, detail=f"Version {version_id} not found")
-
-    return {"message": f"Model {version_id} loaded"}
-
-
-@app.get("/health")
-def health():
-    return {"status": "healthy", "model_loaded": model is not None}
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

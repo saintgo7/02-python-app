@@ -1,95 +1,72 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pathlib import Path
 import logging
-from typing import Optional, Dict, Any
-from datetime import datetime
-from app.api_response import APIResponse
-from app.error_handling import error_handler
-from app.rate_limiting import rate_limiter
-
-app = FastAPI(
-    title="Enhanced Tool API",
-    version="2.0.0",
-    description="Tool with error handling, rate limiting, and database support"
-)
+from app.openapi_config import setup_openapi_documentation
+from app.core.database import init_db
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Initialize database
+init_db()
 
-@app.middleware("http")
-async def log_middleware(request, call_next):
-    """Log all requests"""
-    start_time = datetime.utcnow()
-    response = await call_next(request)
-    process_time = (datetime.utcnow() - start_time).total_seconds()
+# Create FastAPI app
+app = FastAPI(
+    title="API Documentation",
+    version="1.0.0",
+    description="Comprehensive REST API with Advanced Features"
+)
 
-    logger.info(f"{request.method} {request.url.path} - {response.status_code} - {process_time:.3f}s")
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    return response
+# Setup OpenAPI documentation
+setup_openapi_documentation(app, "API Documentation", "1.0.0")
 
+# Include routers
+from app.routes import auth, items
 
-def get_user_id(api_key: Optional[str] = Query(None)) -> str:
-    """Get user ID from API key"""
-    return api_key or "anonymous"
+app.include_router(auth.router, prefix="/auth", tags=["authentication"])
+app.include_router(items.router, prefix="/items", tags=["items"])
 
-
-@app.post("/process")
-@error_handler.handle_exception
-def process_data(
-    data: Dict[str, Any],
-    user_id: str = Depends(get_user_id)
-):
-    """Process data with rate limiting and error handling"""
-    allowed, info = rate_limiter.is_allowed(user_id)
-
-    if not allowed:
-        raise HTTPException(
-            status_code=429,
-            detail="Rate limit exceeded",
-            headers={"Retry-After": str(info["retry_after"])}
-        )
-
+# Static documentation
+docs_dir = Path(__file__).parent.parent / "docs"
+if docs_dir.exists():
     try:
-        # Process data
-        result = {
-            "input": data,
-            "processed_at": datetime.utcnow().isoformat(),
+        app.mount("/documentation", StaticFiles(directory=docs_dir), name="documentation")
+    except:
+        pass
+
+
+@app.get("/", tags=["root"])
+def read_root():
+    """Root endpoint with API information"""
+    return {
+        "message": "Welcome to API Documentation",
+        "version": "1.0.0",
+        "docs": {
+            "swagger": "/docs",
+            "redoc": "/redoc",
+            "openapi": "/openapi.json",
+            "documentation": "/documentation"
         }
-
-        response = APIResponse.success(
-            data=result,
-            message="Data processed successfully"
-        )
-
-        return response.to_dict()
-
-    except Exception as e:
-        error_handler.log_error(e, context="process_data")
-        response = APIResponse.error(
-            message=str(e),
-            code=500
-        )
-        return response.to_dict()
+    }
 
 
-@app.get("/status")
-def get_status():
-    """Get API status"""
-    return APIResponse.success(
-        data={"status": "operational"},
-        message="API is operational"
-    ).to_dict()
-
-
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health_check():
     """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    return {"status": "healthy", "version": "1.0.0"}
 
 
 if __name__ == "__main__":
