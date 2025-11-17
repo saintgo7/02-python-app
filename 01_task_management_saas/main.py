@@ -1,17 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_graphql import GraphQL
 from app.core.database import init_db
-from app.routes import auth, tasks, users
+from app.routes import auth, advanced_crud, websocket
 from config import settings
+from app.cache import cache
+from app.graphql_schema import schema
 
 # Initialize database
 init_db()
 
 # Create FastAPI app
 app = FastAPI(
-    title=settings.API_TITLE,
-    version=settings.API_VERSION,
-    description="Task Management SaaS API"
+    title="01_task_management_saas",
+    version="1.0.0",
+    description="01_task_management_saas API with Advanced Features"
 )
 
 # Add CORS middleware
@@ -25,24 +28,42 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(tasks.router)
-app.include_router(users.router)
+app.include_router(advanced_crud.router)
+app.include_router(websocket.router)
+
+# GraphQL endpoint
+app.add_route("/graphql", GraphQL(schema))
 
 
 @app.get("/")
 def read_root():
-    """Root endpoint"""
     return {
-        "message": "Task Management SaaS API",
-        "version": settings.API_VERSION,
-        "docs": "/docs"
+        "message": "01_task_management_saas API with Advanced Features",
+        "version": "1.0.0",
+        "features": ["REST API", "Advanced Filtering", "Redis Caching", "WebSocket", "GraphQL"]
     }
 
 
 @app.get("/health")
 def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "cache": "connected" if cache.client else "disconnected"
+    }
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Startup event"""
+    print("🚀 Starting 01_task_management_saas with advanced features...")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event"""
+    print("🛑 Shutting down 01_task_management_saas...")
+    if cache.client:
+        cache.client.close()
 
 
 if __name__ == "__main__":

@@ -1,8 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi_graphql import GraphQL
 from app.core.database import init_db
-from app.routes import auth, crud
+from app.routes import auth, advanced_crud, websocket
 from config import settings
+from app.cache import cache
+from app.graphql_schema import schema
 
 # Initialize database
 init_db()
@@ -11,7 +14,7 @@ init_db()
 app = FastAPI(
     title="04_expense_tracker_saas",
     version="1.0.0",
-    description="04_expense_tracker_saas API"
+    description="04_expense_tracker_saas API with Advanced Features"
 )
 
 # Add CORS middleware
@@ -25,17 +28,42 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
-app.include_router(crud.router)
+app.include_router(advanced_crud.router)
+app.include_router(websocket.router)
+
+# GraphQL endpoint
+app.add_route("/graphql", GraphQL(schema))
 
 
 @app.get("/")
 def read_root():
-    return {"message": "04_expense_tracker_saas API", "version": "1.0.0"}
+    return {
+        "message": "04_expense_tracker_saas API with Advanced Features",
+        "version": "1.0.0",
+        "features": ["REST API", "Advanced Filtering", "Redis Caching", "WebSocket", "GraphQL"]
+    }
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "cache": "connected" if cache.client else "disconnected"
+    }
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Startup event"""
+    print("🚀 Starting 04_expense_tracker_saas with advanced features...")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown event"""
+    print("🛑 Shutting down 04_expense_tracker_saas...")
+    if cache.client:
+        cache.client.close()
 
 
 if __name__ == "__main__":
