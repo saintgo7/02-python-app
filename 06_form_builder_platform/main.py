@@ -1,12 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.database import init_db
+from app.routes import auth, crud
+from config import settings
 
+# Initialize database
+init_db()
+
+# Create FastAPI app
 app = FastAPI(
     title="06_form_builder_platform",
-    description="No-code form builder platform",
-    version="1.0.0"
+    version="1.0.0",
+    description="06_form_builder_platform API"
 )
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,14 +23,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(auth.router)
+app.include_router(crud.router)
+
+
 @app.get("/")
-def root():
-    return {"message": "Welcome to 06_form_builder_platform"}
+def read_root():
+    return {"message": "06_form_builder_platform API", "version": "1.0.0"}
+
 
 @app.get("/health")
-def health():
+def health_check():
     return {"status": "healthy"}
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)

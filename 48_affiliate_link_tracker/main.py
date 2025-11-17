@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
-"""
-48_affiliate_link_tracker
-Affiliate link tracking and management
-"""
+from fastapi import FastAPI, HTTPException
+from app.tool import *
+import json
 
-def main():
-    print("Starting 48_affiliate_link_tracker...")
-    # Implementation here
+app = FastAPI(title="48_affiliate_link_tracker", version="1.0.0")
+
+
+@app.post("/process")
+def process_data(data: dict):
+    """Process data"""
+    try:
+        tool = Tool()
+        result = tool.process(data)
+        return {"result": result, "status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

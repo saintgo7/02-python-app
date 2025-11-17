@@ -1,12 +1,20 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.database import init_db
+from app.routes import auth, crud
+from config import settings
 
+# Initialize database
+init_db()
+
+# Create FastAPI app
 app = FastAPI(
     title="07_api_monitoring_service",
-    description="API uptime and performance monitoring",
-    version="1.0.0"
+    version="1.0.0",
+    description="07_api_monitoring_service API"
 )
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,14 +23,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(auth.router)
+app.include_router(crud.router)
+
+
 @app.get("/")
-def root():
-    return {"message": "Welcome to 07_api_monitoring_service"}
+def read_root():
+    return {"message": "07_api_monitoring_service API", "version": "1.0.0"}
+
 
 @app.get("/health")
-def health():
+def health_check():
     return {"status": "healthy"}
+
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)

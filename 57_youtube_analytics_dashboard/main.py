@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
-"""
-57_youtube_analytics_dashboard
-YouTube channel analytics dashboard
-"""
+from fastapi import FastAPI, HTTPException
+from app.tool import *
+import json
 
-def main():
-    print("Starting 57_youtube_analytics_dashboard...")
-    # Implementation here
+app = FastAPI(title="57_youtube_analytics_dashboard", version="1.0.0")
+
+
+@app.post("/process")
+def process_data(data: dict):
+    """Process data"""
+    try:
+        tool = Tool()
+        result = tool.process(data)
+        return {"result": result, "status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
