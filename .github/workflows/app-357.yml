@@ -1,0 +1,98 @@
+name: App 357 - Test & Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - '357_*/**'
+      - '.github/workflows/app-357.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - '357_*/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ['3.11']
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python ${ matrix.python-version }
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${ matrix.python-version }
+
+    - name: Cache pip packages
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${ runner.os }-pip-${ hashFiles('**/requirements.txt') }
+        restore-keys: |
+          ${ runner.os }-pip-
+
+    - name: Install dependencies
+      run: |
+        cd 357_*
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Lint with Flake8
+      run: |
+        cd 357_*
+        pip install flake8
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Type check with mypy
+      run: |
+        cd 357_*
+        pip install mypy
+        mypy app/ --ignore-missing-imports || true
+
+    - name: Test with pytest
+      run: |
+        cd 357_*
+        pip install pytest pytest-cov
+        pytest --cov=app --cov-report=xml || true
+
+    - name: Security scan with Bandit
+      run: |
+        cd 357_*
+        pip install bandit
+        bandit -r app/ -f json -o bandit-report.json || true
+
+    - name: Check dependencies with Safety
+      run: |
+        cd 357_*
+        pip install safety
+        safety check --json || true
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Build Docker image
+      run: |
+        APP_DIR=$( ls -d 357_* )
+        docker build -t myapp:${ github.sha } -f $APP_DIR/Dockerfile $APP_DIR/
+
+    - name: Docker image test
+      run: |
+        docker run --rm myapp:${ github.sha } python -m pytest tests/ || true
+
+    - name: Image scan with Trivy
+      run: |
+        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image myapp:${ github.sha } || true

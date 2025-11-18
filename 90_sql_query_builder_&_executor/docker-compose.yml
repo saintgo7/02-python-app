@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: python-app-90
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./test.db
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    command: uvicorn main:app --reload --host 0.0.0.0
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-90
+    ports:
+      - "6379:6379"
+
+volumes:
+  app-data:

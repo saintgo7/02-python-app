@@ -1,0 +1,57 @@
+name: App 102 - CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '102_*/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '102_*/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          cd 102_*
+          pip install -r requirements.txt pytest pytest-cov pytest-asyncio
+      - name: Lint
+        run: |
+          cd 102_*
+          flake8 . || true
+      - name: Type check
+        run: |
+          cd 102_*
+          mypy . --ignore-missing-imports || true
+      - name: Run tests
+        run: |
+          cd 102_*
+          pytest tests/ --cov=app --cov-report=xml
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          cd 102_*
+          pip install -r requirements.txt bandit safety
+      - name: Bandit
+        run: |
+          cd 102_*
+          bandit -r . -ll || true
+      - name: Safety
+        run: |
+          cd 102_*
+          safety check || true

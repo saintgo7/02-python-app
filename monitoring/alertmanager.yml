@@ -1,0 +1,113 @@
+global:
+  resolve_timeout: 5m
+  slack_api_url: 'YOUR_SLACK_WEBHOOK_URL'  # Configure with your Slack webhook
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Root route
+route:
+  receiver: 'default'
+  group_by: ['alertname', 'instance', 'severity']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 12h
+
+  routes:
+    # Critical alerts - PagerDuty + Slack
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 0s
+      group_interval: 5s
+      repeat_interval: 1h
+
+    # Warning alerts - Slack
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 30s
+      group_interval: 10m
+      repeat_interval: 4h
+
+    # Info alerts - Email
+    - match:
+        severity: info
+      receiver: 'info'
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 24h
+
+# Receivers configuration
+receivers:
+  # Default receiver
+  - name: 'default'
+    slack_configs:
+      - channel: '#alerts'
+        title: 'Alert: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+
+  # Critical alerts
+  - name: 'critical'
+    slack_configs:
+      - channel: '#critical-alerts'
+        title: '🚨 CRITICAL: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'danger'
+        actions:
+          - type: button
+            text: 'Runbook'
+            url: 'https://wiki.company.com/runbooks/{{ .GroupLabels.alertname }}'
+    pagerduty_configs:
+      - service_key: 'YOUR_PAGERDUTY_SERVICE_KEY'
+        client: 'Prometheus'
+        client_url: '{{ .ExternalURL }}'
+        description: '{{ .GroupLabels.alertname }}: {{ .Alerts.Firing | len }} firing'
+
+  # Warning alerts
+  - name: 'warning'
+    slack_configs:
+      - channel: '#warnings'
+        title: '⚠️ WARNING: {{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+        color: 'warning'
+
+  # Info alerts
+  - name: 'info'
+    email_configs:
+      - to: 'devops@company.com'
+        from: 'alertmanager@company.com'
+        smarthost: 'smtp.company.com:587'
+        auth_username: 'alertmanager@company.com'
+        auth_password: 'YOUR_SMTP_PASSWORD'
+        headers:
+          Subject: 'Alert: {{ .GroupLabels.alertname }}'
+    slack_configs:
+      - channel: '#info-alerts'
+        title: 'ℹ️ INFO: {{ .GroupLabels.alertname }}'
+
+# Inhibition rules - suppress certain alerts
+inhibit_rules:
+  # Don't alert if parent alert is already firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+
+  # Don't alert for instances that are down
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: '.*'
+    equal: ['instance']
+
+  # Don't send warning if critical is already firing for same service
+  - source_match:
+      severity: 'critical'
+    target_match_re:
+      severity: 'warning|info'
+    equal: ['job', 'instance']

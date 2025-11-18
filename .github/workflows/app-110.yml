@@ -1,0 +1,57 @@
+name: App 110 - CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - '110_*/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '110_*/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      - name: Install dependencies
+        run: |
+          cd 110_*
+          pip install -r requirements.txt pytest pytest-cov pytest-asyncio
+      - name: Lint
+        run: |
+          cd 110_*
+          flake8 . || true
+      - name: Type check
+        run: |
+          cd 110_*
+          mypy . --ignore-missing-imports || true
+      - name: Run tests
+        run: |
+          cd 110_*
+          pytest tests/ --cov=app --cov-report=xml
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          cd 110_*
+          pip install -r requirements.txt bandit safety
+      - name: Bandit
+        run: |
+          cd 110_*
+          bandit -r . -ll || true
+      - name: Safety
+        run: |
+          cd 110_*
+          safety check || true

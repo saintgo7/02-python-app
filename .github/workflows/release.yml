@@ -1,0 +1,40 @@
+name: Release Automation
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Generate changelog
+        run: |
+          python -c "
+          import subprocess
+          result = subprocess.run(['git', 'log', '--oneline', '-n', '20'], capture_output=True, text=True)
+          with open('CHANGELOG_LATEST.md', 'w') as f:
+              f.write(result.stdout)
+          "
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body_path: CHANGELOG_LATEST.md
+          draft: false
+          prerelease: false

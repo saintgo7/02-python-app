@@ -1,0 +1,194 @@
+groups:
+  - name: Application Alerts
+    interval: 30s
+    rules:
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: application
+        annotations:
+          summary: "High error rate detected on {{ $labels.instance }}"
+          description: "Error rate is {{ $value | humanizePercentage }} for endpoint {{ $labels.endpoint }}"
+
+      # High latency
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "High latency detected on {{ $labels.instance }}"
+          description: "P95 latency is {{ $value | humanizeDuration }} for endpoint {{ $labels.endpoint }}"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(node_cpu_seconds_total{mode!="idle"}[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ $value | humanizePercentage }}"
+
+      # Disk usage
+      - alert: DiskUsageHigh
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High disk usage on {{ $labels.instance }}"
+          description: "Disk {{ $labels.device }} is {{ $value | humanizePercentage }} full"
+
+  - name: Database Alerts
+    interval: 30s
+    rules:
+      # High database query latency
+      - alert: HighDatabaseLatency
+        expr: histogram_quantile(0.95, rate(db_query_duration_seconds_bucket[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "High database query latency detected"
+          description: "P95 query latency for {{ $labels.operation }} is {{ $value | humanizeDuration }}"
+
+      # Database connection pool near capacity
+      - alert: DatabasePoolNearCapacity
+        expr: (db_connections_active / db_connection_pool_size) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool near capacity on {{ $labels.database }}"
+          description: "{{ $value | humanizePercentage }} of connections in use"
+
+      # High database error rate
+      - alert: HighDatabaseErrorRate
+        expr: rate(db_query_errors_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "High database error rate detected for {{ $labels.operation }}"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+  - name: Cache Alerts
+    interval: 30s
+    rules:
+      # Low cache hit ratio
+      - alert: LowCacheHitRatio
+        expr: rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) < 0.5
+        for: 10m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Low cache hit ratio for {{ $labels.cache_name }}"
+          description: "Cache hit ratio is {{ $value | humanizePercentage }}"
+
+  - name: Infrastructure Alerts
+    interval: 30s
+    rules:
+      # Instance down
+      - alert: InstanceDown
+        expr: up{job="backend-apps"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Instance {{ $labels.instance }} is down"
+          description: "Instance {{ $labels.instance }} has been down for more than 1 minute"
+
+      # Service unreachable
+      - alert: ServiceUnreachable
+        expr: up{job=~"prometheus|alertmanager|grafana|elasticsearch"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "Service {{ $labels.job }} is unreachable"
+          description: "Service {{ $labels.job }} at {{ $labels.instance }} is not responding"
+
+      # Network packet loss
+      - alert: HighNetworkPacketLoss
+        expr: rate(node_network_transmit_errors_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "High network packet loss on {{ $labels.instance }}"
+          description: "Packet loss is {{ $value | humanizePercentage }} on device {{ $labels.device }}"
+
+  - name: Application Health Alerts
+    interval: 30s
+    rules:
+      # Queue backlog growing
+      - alert: QueueBacklogGrowing
+        expr: rate(requests_queued[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: application
+        annotations:
+          summary: "Request queue backlog is growing"
+          description: "Queue is growing at {{ $value | humanize }} requests/sec"
+
+      # High concurrent users
+      - alert: HighConcurrentUsers
+        expr: active_users > 10000
+        for: 5m
+        labels:
+          severity: info
+          component: application
+        annotations:
+          summary: "High number of concurrent users"
+          description: "{{ $value | humanize }} users currently active"
+
+  - name: Prometheus Internal Alerts
+    interval: 30s
+    rules:
+      # Prometheus scrape slow
+      - alert: PrometheusScrapeSlow
+        expr: increase(prometheus_target_scrapes_exceeded_sample_limit_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus scrape is slow"
+          description: "Prometheus is exceeding sample limits"
+
+      # Prometheus TSDB corruption
+      - alert: Prometheus TSDBCorruption
+        expr: increase(prometheus_tsdb_symbol_table_size_bytes[1h]) > 1e8
+        for: 5m
+        labels:
+          severity: critical
+          component: monitoring
+        annotations:
+          summary: "Prometheus TSDB might be corrupted"
+          description: "TSDB symbol table size is growing rapidly"
