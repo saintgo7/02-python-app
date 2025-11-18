@@ -9,7 +9,7 @@ router = APIRouter()
 # Authentication Endpoints
 # ============================================
 
-@router.post("/auth/register", tags=["Authentication"])
+@router.post("/auth/register", tags=["Authentication"], status_code=status.HTTP_201_CREATED)
 async def register(email: str, password: str):
     """
     Register a new user.
