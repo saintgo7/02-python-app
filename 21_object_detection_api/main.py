@@ -1,25 +1,32 @@
+#!/usr/bin/env python3
+"""
+Object Detection Api
+Production-ready FastAPI application with comprehensive monitoring
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pathlib import Path
 import logging
-from app.openapi_config import setup_openapi_documentation
-from app.core.database import init_db
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+
+from app.core.logging import setup_logging
+from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.core.metrics import setup_metrics_endpoint
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logging(__name__)
 
-# Initialize database
-init_db()
-
-# Create FastAPI app
+# Create FastAPI application
 app = FastAPI(
-    title="API Documentation",
+    title="Object Detection Api",
     version="1.0.0",
-    description="Comprehensive REST API with Advanced Features"
+    description="Production-ready application with monitoring, error handling, and logging"
 )
+
+# Add security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -30,44 +37,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Setup OpenAPI documentation
-setup_openapi_documentation(app, "API Documentation", "1.0.0")
+# Setup Prometheus metrics
+setup_metrics_endpoint(app, app_name="Object Detection Api", version="1.0.0", environment="production")
 
-# Include routers
-from app.routes import auth, items
-
-app.include_router(auth.router, prefix="/auth", tags=["authentication"])
-app.include_router(items.router, prefix="/items", tags=["items"])
-
-# Static documentation
-docs_dir = Path(__file__).parent.parent / "docs"
-if docs_dir.exists():
-    try:
-        app.mount("/documentation", StaticFiles(directory=docs_dir), name="documentation")
-    except:
-        pass
-
-
-@app.get("/", tags=["root"])
-def read_root():
-    """Root endpoint with API information"""
+@app.get("/")
+async def read_root():
+    """Root endpoint with application info"""
+    logger.info("Root endpoint accessed")
     return {
-        "message": "Welcome to API Documentation",
+        "message": "Welcome to Object Detection Api",
         "version": "1.0.0",
         "docs": {
             "swagger": "/docs",
             "redoc": "/redoc",
             "openapi": "/openapi.json",
-            "documentation": "/documentation"
+            "metrics": "/metrics"
         }
     }
 
-
-@app.get("/health", tags=["health"])
-def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "version": "1.0.0"}
-
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "service": "Object Detection Api"
+    }
 
 if __name__ == "__main__":
     import uvicorn

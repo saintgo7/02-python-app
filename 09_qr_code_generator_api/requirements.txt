@@ -11,19 +11,12 @@ pytest==7.4.3
 httpx==0.25.2
 alembic==1.13.1
 
-# Advanced features
+# Monitoring and Logging
+prometheus-client==0.16.0
+python-json-logger==2.0.4
+
+# Optional but recommended
 redis==5.0.1
 aioredis==2.0.1
-graphene==3.3
-graphene-sqlalchemy==3.0.0
-strawberry-graphql==0.213.0
-python-multipart==0.0.6
-websockets==12.0
-
-# Optional: Async support
 aiofiles==23.2.1
 asyncpg==0.29.0
-
-# Documentation
-mkdocs==1.5.3
-mkdocs-material==9.4.14

@@ -1,39 +1,32 @@
 #!/usr/bin/env python3
 """
-Medical Image Analysis AI
-Deep learning system for analyzing X-rays, CT scans, and MRI images with AI diagnostics
+Medical Image Analysis Ai
+Production-ready FastAPI application with comprehensive monitoring
 """
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 import logging
-from pathlib import Path
-import os
-from dotenv import load_dotenv
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
 
-# Load environment variables
-load_dotenv('.env.local')
+from app.core.logging import setup_logging
+from app.core.middleware import RequestLoggingMiddleware, SecurityHeadersMiddleware
+from app.core.metrics import setup_metrics_endpoint
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = setup_logging(__name__)
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
-)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create FastAPI app
+# Create FastAPI application
 app = FastAPI(
-    title="Medical Image Analysis AI",
+    title="Medical Image Analysis Ai",
     version="1.0.0",
-    description="Deep learning system for analyzing X-rays, CT scans, and MRI images with AI diagnostics"
+    description="Production-ready application with monitoring, error handling, and logging"
 )
+
+# Add security middleware
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -44,30 +37,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Setup Prometheus metrics
+setup_metrics_endpoint(app, app_name="Medical Image Analysis Ai", version="1.0.0", environment="production")
 
 @app.get("/")
 async def read_root():
-    """Root endpoint"""
+    """Root endpoint with application info"""
+    logger.info("Root endpoint accessed")
     return {
-        "message": "Welcome to Medical Image Analysis AI",
+        "message": "Welcome to Medical Image Analysis Ai",
         "version": "1.0.0",
         "docs": {
             "swagger": "/docs",
-            "redoc": "/redoc"
+            "redoc": "/redoc",
+            "openapi": "/openapi.json",
+            "metrics": "/metrics"
         }
     }
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "healthy", "version": "1.0.0"}
+    """Health check endpoint for monitoring"""
+    return {
+        "status": "healthy",
+        "version": "1.0.0",
+        "service": "Medical Image Analysis Ai"
+    }
 
 if __name__ == "__main__":
     import uvicorn
