@@ -14,8 +14,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from app.core.database import engine, Base
 from app.core.logging import setup_logging
+from app.core.middleware import (
+    RequestIdMiddleware,
+    LoggingMiddleware,
+    SecurityHeadersMiddleware
+)
 from app.config import get_settings
-from app.routes import auth, packages, bookings, payments, analytics
+from app.routes import auth, packages, bookings, payments, analytics, users, expenses, guides, reviews
 
 # Setup logging
 logger = setup_logging(__name__)
@@ -30,8 +35,14 @@ app = FastAPI(
     version="1.0.0",
     description="Comprehensive ERP system for travel agencies with booking, payment, and analytics",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
+
+# Add middleware (order matters - first added, last executed)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(LoggingMiddleware)
+app.add_middleware(RequestIdMiddleware)
 
 # Add CORS middleware
 app.add_middleware(
@@ -44,9 +55,13 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(packages.router)
 app.include_router(bookings.router)
 app.include_router(payments.router)
+app.include_router(expenses.router)
+app.include_router(guides.router)
+app.include_router(reviews.router)
 app.include_router(analytics.router)
 
 
